@@ -7,30 +7,12 @@ const bcrypt = require('bcrypt');
 const flash = require('flash');
 const createAvatar = require('../public/js/octodex_avatar');
 
-
-// const Users = function() { return knex('users') };
-function authorizedUser(req, res, next) {
-  //
-  let userID = req.session.id;
-  if (userID) {
-    next();
-  }
-  else {
-    res.sendFile('index.html');
-  }
-}
-
-function authorizedAdmin(req, res, next) {
-  //
-};
-
 let onCreateSession = (user, callback)=>{
   bcrypt.hash(user.username, 10, function(err, hash) {
-    
     let _session={
-      session_id:hash,
-      user_id:user.id,
-      active:1
+      session_id: hash,
+      user_id: user.id,
+      active: 1
     };
 
     knex('sessions')
@@ -46,14 +28,14 @@ let onCreateSession = (user, callback)=>{
   });
 };
 
-let getUser = (username) =>{
+let getUser = (username) => {
     return new Promise((resolve, reject)=>{
     let query ={
-      'users.username':username
+      'username': username
     };
     
     knex('users')
-      .select('users.*')
+      .select('*')
       .innerJoin('roles', 'users.role_id', 'roles.id')
       .where(query)
       .first()
@@ -66,30 +48,15 @@ let getUser = (username) =>{
   });
 };
 
-router.get('/', function(req, res, next) {
-  let user = req.session.user;
-  res.render('users/auth', {
-    user: user
-  })
-})
-
-router.get('/signup', function(req, res, next) {
-  res.render('users/signup')
-})
-
-router.get('/login', function(req, res, next) {
-  res.render('users/login');
+router.get('/', function(req, res) {
+  console.log(req.user);
+  if (req.user)
+    res.json({user: req.user});
+  else
+    res.status(413).send();
 })
 
 router.post('/signup', function(req, res, next) {
-  
-  let onRender = (data) => {
-    if(data[0]==true){
-      res.redirect('/profile');
-    }else{
-      res.redirect('/');
-    }
-  };
 
   let rolePromise = new Promise((resolve, reject)=>{
     let query = {
@@ -113,16 +80,14 @@ router.post('/signup', function(req, res, next) {
     let query ={
       username:req.body.username
     };
-  
+    
     let saveUser = (user) => {
-     
       if(!user){
-
         createAvatar
           .generateAvatar((created_avatar)=>{
             rolePromise
               .then((data)=>{
-                let hash = bcrypt.hashSync(req.body.hashed_password, 12);
+                let hash = bcrypt.hashSync(req.body.password, 12);
 
                 let obj = {
                   username : req.body.username,
@@ -139,9 +104,11 @@ router.post('/signup', function(req, res, next) {
       
                 knex('users')
                   .insert(obj)
+                  .returning('*')
                   .then((d) => {
+                    console.log(d);
                     getUser(req.body.username).then((u)=>{
-                      console.log('adter insert')
+                      console.log('after insert')
                       console.log(u)
                       onCreateSession(u,(err, data, _session)=>{
                         req.session.id = _session.session_id;
@@ -166,41 +133,31 @@ router.post('/signup', function(req, res, next) {
 
   });
 
-  userProimse
-    .then(onRender)
-    .catch((err) => {
-      console.log('ERROR');
-      res.redirect('/');
-    });
+  userProimse.then((data) => {
+    if(data[0]==true){
+      res.json({user: data[1]});
+    }else{
+      res.status(401).send();
+    }
+  }).catch((err) => {
+    console.log('ERROR');
+    res.status(401).send();
+  });
 
 });
 
 router.post('/login', function(req, res, next) {
 
-  let onRender = (data) => {
-    if(data[0]==true){
-      console.log(req.session.id + " logged in.");
-      res.send({status: 'success'});//res.redirect('/profile');
-    }else{
-      res.send({status: 'failed'});//res.redirect('/');
-    }
-  };
-
   let userPromise = new Promise((resolve, reject) => {
-
-    let query = {
-      username: req.body.username
-    };
-
     let onLogin = (user) => {
-
       if(user){
-        bcrypt.compare(req.body.hashed_password, user.hashed_password, function(err, _data) {
+        bcrypt.compare(req.body.password, user.hashed_password, function(err, _data) {
           if (_data) {
+            
             onCreateSession(user,(err, data, _session)=>{
               req.session.id = _session.session_id;
               res.cookie("loggedin", true);
-              resolve([err, data])
+                resolve([err, data])
             });
           }
           else {
@@ -218,10 +175,12 @@ router.post('/login', function(req, res, next) {
   });
 
   userPromise
-    .then(onRender)
+    .then( data => {
+      res.json({user: data[1]});
+    })
     .catch((err) => {
       console.log('ERROR ', err);
-      res.redirect('/auth/login');
+      res.status(413).json({});
     });
 
 });
@@ -233,7 +192,7 @@ router.get('/logout', function(req, res) {
   };
 
   let update = {
-    active:0
+    active:0        
   };
   
   knex('sessions')
@@ -243,7 +202,7 @@ router.get('/logout', function(req, res) {
     .then((data)=>{
       req.session = null;
       res.clearCookie('loggedin');
-      res.redirect('/');
+      res.json({});
     });
 });
 

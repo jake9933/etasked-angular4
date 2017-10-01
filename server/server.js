@@ -33,13 +33,12 @@ app.use(cookieSession({
     secret: "etasked",
 }))
 app.use(require('flash')());
-
-// Used Routes.
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
-})
+app.use(require('./middlewares/auth'));
 
 app.use('/api', routes);
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+})
 
 // Socket IO
 const server = require('./socket/socket.io')(app);

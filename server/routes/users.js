@@ -9,6 +9,7 @@ const flash = require('flash');
 function authorizedUser(req, res, next) {
   //
   let userID = req.session.user;
+  console.log(req.user);
   if(userID){
     next();
   } else {
